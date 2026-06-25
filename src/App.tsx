@@ -76,6 +76,8 @@ export default function App() {
 
   // Firebase Integration states
   const [user, setUser] = useState<any>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [savedModels, setSavedModels] = useState<SavedModel[]>([]);
   const [activeModelId, setActiveModelId] = useState<string | null>(null);
   const [activeModelName, setActiveModelName] = useState<string>('Modelo Local');
@@ -87,14 +89,26 @@ export default function App() {
 
   useEffect(() => {
     const unsubscribe = setupAuthListener(async (currentUser) => {
-      setUser(currentUser);
       if (currentUser) {
+        setUser(currentUser);
+        setAuthError(null);
         fetchModels();
       } else {
         try {
-          await loginAnonymously();
-        } catch (error) {
+          const anonUser = await loginAnonymously();
+          setUser(anonUser);
+          setAuthError(null);
+        } catch (error: any) {
           console.error("Autenticación fallida", error);
+          let userFriendlyMessage = "Error de conexión con la nube";
+          if (error?.code === 'auth/operation-not-allowed') {
+            userFriendlyMessage = "El proveedor de inicio de sesión Anónimo está desactivado en la consola de Firebase.";
+          } else if (error?.code === 'auth/unauthorized-domain') {
+            userFriendlyMessage = "Este dominio (juancantillano.github.io) no está en la lista de Dominios Autorizados en la consola de Firebase.";
+          } else if (error?.message) {
+            userFriendlyMessage = error.message;
+          }
+          setAuthError(userFriendlyMessage);
         }
       }
     });
@@ -118,6 +132,7 @@ export default function App() {
     if (!newModelName.trim()) return;
 
     setIsSaving(true);
+    setSaveError(null);
     try {
       const modelId = activeModelId || 'model_' + Math.random().toString(36).substring(2, 11);
       const saved = await saveFinancialModel({
@@ -135,8 +150,9 @@ export default function App() {
       setShowSaveModal(false);
       setNewModelName('');
       await fetchModels();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error guardando el modelo:", error);
+      setSaveError(error?.message || "Error al guardar el escenario en Firebase.");
     } finally {
       setIsSaving(false);
     }
@@ -246,12 +262,33 @@ export default function App() {
 
         <div className="flex items-center gap-3 sm:gap-4">
           {/* Cloud Connection Status */}
-          <div className="hidden sm:flex items-center gap-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-semibold text-slate-600">
+          <div className="flex items-center gap-1.5 text-[11px] sm:text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 sm:px-2.5 sm:py-1.5 font-semibold text-slate-600">
             {user ? (
               <>
-                <Cloud className="w-4 h-4 text-indigo-600 animate-bounce" />
-                <span>Nube Conectada</span>
+                <Cloud className="w-4 h-4 text-emerald-600 animate-pulse" />
+                <span className="text-emerald-700 hidden xs:inline">Nube Conectada</span>
+                <span className="text-emerald-700 xs:hidden">Conectado</span>
               </>
+            ) : authError ? (
+              <div className="group relative flex items-center gap-1.5 cursor-help">
+                <Cloud className="w-4 h-4 text-rose-500 animate-bounce" />
+                <span className="text-rose-600 hidden xs:inline">Error de Nube</span>
+                <span className="text-rose-600 xs:hidden">Error</span>
+                
+                {/* Tooltip on hover */}
+                <div className="absolute right-0 top-full mt-2 w-72 p-4 bg-slate-900 text-white rounded-xl shadow-xl text-[11px] font-medium leading-relaxed hidden group-hover:block z-50 transition-all duration-200">
+                  <p className="font-bold text-rose-400 mb-1">Error de Firebase:</p>
+                  <p className="text-slate-200 mb-2 font-mono text-[10px] bg-slate-950 p-2 rounded border border-slate-800">{authError}</p>
+                  <div className="border-t border-slate-800 pt-2 text-slate-300">
+                    <p className="font-bold text-indigo-400 mb-1">¿Cómo solucionarlo?</p>
+                    <ol className="list-decimal pl-3.5 space-y-1">
+                      <li>Ve a tu consola de Firebase</li>
+                      <li>Habilita el proveedor <strong>Anónimo</strong> en <em>Authentication → Sign-in method</em></li>
+                      <li>Añade <strong>juancantillano.github.io</strong> a la lista de <em>Dominios Autorizados</em> en la pestaña de configuración de <em>Authentication</em></li>
+                    </ol>
+                  </div>
+                </div>
+              </div>
             ) : (
               <>
                 <Loader2 className="w-4 h-4 text-slate-400 animate-spin" />
@@ -490,6 +527,23 @@ export default function App() {
                   maxLength={100}
                 />
               </div>
+
+              {saveError && (
+                <div className="p-3.5 bg-rose-50 border border-rose-100 rounded-xl text-[11px] text-rose-700 font-medium leading-relaxed">
+                  <p className="font-bold mb-1 flex items-center gap-1.5 text-rose-800">
+                    <Cloud className="w-3.5 h-3.5 text-rose-600" />
+                    No se pudo guardar en la nube:
+                  </p>
+                  <p className="font-mono text-[10px] bg-white p-2 rounded border border-rose-150 mb-2">{saveError}</p>
+                  <div className="text-slate-600 text-[10px] pt-1.5 border-t border-rose-200">
+                    <p className="font-bold text-slate-700">Por favor, verifica en Firebase:</p>
+                    <ol className="list-decimal pl-3.5 mt-0.5 space-y-0.5">
+                      <li>Habilita el acceso <strong>Anónimo</strong> en Authentication → Sign-in method.</li>
+                      <li>Añade <strong>juancantillano.github.io</strong> como Dominio Autorizado.</li>
+                    </ol>
+                  </div>
+                </div>
+              )}
 
               <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 text-[11px] text-slate-500 leading-relaxed font-medium">
                 Se guardará toda la configuración de precios, volumen de ventas, costos fijos, plan de inversiones e indicadores de crédito en la base de datos de Firebase.
