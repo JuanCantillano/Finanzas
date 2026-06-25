@@ -21,6 +21,8 @@ import {
 import { 
   setupAuthListener, 
   loginAnonymously, 
+  loginWithGoogle,
+  logoutUser,
   saveFinancialModel, 
   loadFinancialModels, 
   deleteFinancialModel, 
@@ -52,7 +54,9 @@ import {
   Trash2,
   Plus,
   RefreshCw,
-  Loader2
+  Loader2,
+  LogIn,
+  LogOut
 } from 'lucide-react';
 
 export default function App() {
@@ -86,18 +90,80 @@ export default function App() {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [newModelName, setNewModelName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isAuthenticating, setIsAuthenticating] = useState(true);
+
+  // Helper to load models from localStorage
+  const getLocalModels = (): SavedModel[] => {
+    try {
+      const data = localStorage.getItem('local_financial_models');
+      return data ? JSON.parse(data) : [];
+    } catch (e) {
+      console.error("Error reading localStorage:", e);
+      return [];
+    }
+  };
+
+  // Helper to save models to localStorage
+  const saveLocalModels = (models: SavedModel[]) => {
+    try {
+      localStorage.setItem('local_financial_models', JSON.stringify(models));
+    } catch (e) {
+      console.error("Error writing localStorage:", e);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setIsAuthenticating(true);
+    setAuthError(null);
+    try {
+      const googleUser = await loginWithGoogle();
+      setUser(googleUser);
+    } catch (error: any) {
+      console.error("Error al iniciar sesión con Google:", error);
+      let userFriendlyMessage = "Error al iniciar sesión con Google";
+      if (error?.code === 'auth/popup-blocked') {
+        userFriendlyMessage = "El navegador bloqueó la ventana emergente de Google. Por favor, permite las ventanas emergentes para este sitio.";
+      } else if (error?.message) {
+        userFriendlyMessage = error.message;
+      }
+      setAuthError(userFriendlyMessage);
+    } finally {
+      setIsAuthenticating(false);
+      await fetchModels();
+    }
+  };
+
+  const handleLogout = async () => {
+    if (confirm("¿Desea cerrar sesión en la nube? Seguirá teniendo acceso a sus modelos locales.")) {
+      setIsAuthenticating(true);
+      try {
+        await logoutUser();
+        setUser(null);
+        setAuthError(null);
+      } catch (error) {
+        console.error("Error al cerrar sesión:", error);
+      } finally {
+        setIsAuthenticating(false);
+        await fetchModels();
+      }
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = setupAuthListener(async (currentUser) => {
+      setIsAuthenticating(true);
       if (currentUser) {
         setUser(currentUser);
         setAuthError(null);
-        fetchModels();
+        setIsAuthenticating(false);
+        await fetchModels();
       } else {
         try {
           const anonUser = await loginAnonymously();
           setUser(anonUser);
           setAuthError(null);
+          setIsAuthenticating(false);
+          await fetchModels();
         } catch (error: any) {
           console.error("Autenticación fallida", error);
           let userFriendlyMessage = "Error de conexión con la nube";
@@ -109,6 +175,9 @@ export default function App() {
             userFriendlyMessage = error.message;
           }
           setAuthError(userFriendlyMessage);
+          setIsAuthenticating(false);
+          // Load local models even if auth fails
+          await fetchModels();
         }
       }
     });
@@ -118,10 +187,30 @@ export default function App() {
   const fetchModels = async () => {
     setLoadingModels(true);
     try {
-      const models = await loadFinancialModels();
-      setSavedModels(models);
+      const localModels = getLocalModels();
+      let firebaseModels: SavedModel[] = [];
+
+      // If user is logged in, try to load from Firebase
+      if (auth.currentUser) {
+        try {
+          firebaseModels = await loadFinancialModels();
+        } catch (fbError) {
+          console.warn("Error cargando modelos de Firebase:", fbError);
+        }
+      }
+
+      // Combine both lists. Deduplicate by ID, prioritizing cloud versions if logged in
+      const combinedModels = [...firebaseModels];
+      localModels.forEach(lm => {
+        if (!combinedModels.some(cm => cm.id === lm.id)) {
+          combinedModels.push(lm);
+        }
+      });
+
+      setSavedModels(combinedModels);
     } catch (error) {
-      console.error("Error cargando modelos de Firebase:", error);
+      console.error("Error cargando modelos:", error);
+      setSavedModels(getLocalModels());
     } finally {
       setLoadingModels(false);
     }
@@ -133,29 +222,71 @@ export default function App() {
 
     setIsSaving(true);
     setSaveError(null);
-    try {
-      const modelId = activeModelId || 'model_' + Math.random().toString(36).substring(2, 11);
-      const saved = await saveFinancialModel({
-        id: modelId,
-        name: newModelName.trim(),
-        products,
-        expenses,
-        investments,
-        financing,
-        sensitivity
-      });
+    
+    const modelId = activeModelId || 'model_' + Math.random().toString(36).substring(2, 11);
+    const modelData = {
+      id: modelId,
+      name: newModelName.trim(),
+      products,
+      expenses,
+      investments,
+      financing,
+      sensitivity
+    };
 
-      setActiveModelId(saved.id);
-      setActiveModelName(saved.name);
+    let savedLocally = false;
+    let savedInCloud = false;
+
+    // Save to Firebase Cloud if user is authenticated
+    if (user) {
+      try {
+        const saved = await saveFinancialModel(modelData);
+        setActiveModelId(saved.id);
+        setActiveModelName(saved.name);
+        savedInCloud = true;
+      } catch (error: any) {
+        console.error("Error guardando el modelo en Firebase:", error);
+        setSaveError(`No se pudo guardar en la nube: ${error?.message || "error"}. Se guardará localmente.`);
+      }
+    }
+
+    // Always save a local copy to localStorage
+    try {
+      const localModels = getLocalModels();
+      const now = new Date().toISOString();
+      const existingIndex = localModels.findIndex(m => m.id === modelId);
+      
+      const fullModel: SavedModel = {
+        ...modelData,
+        userId: user ? user.uid : 'local_user',
+        createdAt: existingIndex >= 0 ? (localModels[existingIndex].createdAt || now) : now,
+        updatedAt: now
+      };
+
+      if (existingIndex >= 0) {
+        localModels[existingIndex] = fullModel;
+      } else {
+        localModels.unshift(fullModel);
+      }
+      
+      saveLocalModels(localModels);
+      savedLocally = true;
+
+      if (!savedInCloud) {
+        setActiveModelId(fullModel.id);
+        setActiveModelName(fullModel.name);
+      }
+    } catch (e) {
+      console.error("Error al guardar localmente:", e);
+    }
+
+    if (savedLocally || savedInCloud) {
       setShowSaveModal(false);
       setNewModelName('');
       await fetchModels();
-    } catch (error: any) {
-      console.error("Error guardando el modelo:", error);
-      setSaveError(error?.message || "Error al guardar el escenario en Firebase.");
-    } finally {
-      setIsSaving(false);
     }
+    
+    setIsSaving(false);
   };
 
   const handleLoadModel = (model: SavedModel) => {
@@ -174,7 +305,24 @@ export default function App() {
     if (!confirm("¿Está seguro de que desea eliminar este escenario?")) return;
 
     try {
-      await deleteFinancialModel(modelId);
+      // If user is logged in, try to delete from Firebase
+      if (user) {
+        try {
+          await deleteFinancialModel(modelId);
+        } catch (fbError) {
+          console.error("Error deleting from Firebase:", fbError);
+        }
+      }
+
+      // Always delete from localStorage
+      try {
+        const localModels = getLocalModels();
+        const filtered = localModels.filter(m => m.id !== modelId);
+        saveLocalModels(filtered);
+      } catch (localError) {
+        console.error("Error deleting from localStorage:", localError);
+      }
+
       if (activeModelId === modelId) {
         setActiveModelId(null);
         setActiveModelName('Modelo Local');
@@ -262,38 +410,58 @@ export default function App() {
 
         <div className="flex items-center gap-3 sm:gap-4">
           {/* Cloud Connection Status */}
-          <div className="flex items-center gap-1.5 text-[11px] sm:text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 sm:px-2.5 sm:py-1.5 font-semibold text-slate-600">
-            {user ? (
-              <>
-                <Cloud className="w-4 h-4 text-emerald-600 animate-pulse" />
-                <span className="text-emerald-700 hidden xs:inline">Nube Conectada</span>
-                <span className="text-emerald-700 xs:hidden">Conectado</span>
-              </>
-            ) : authError ? (
-              <div className="group relative flex items-center gap-1.5 cursor-help">
-                <Cloud className="w-4 h-4 text-rose-500 animate-bounce" />
-                <span className="text-rose-600 hidden xs:inline">Error de Nube</span>
-                <span className="text-rose-600 xs:hidden">Error</span>
+          <div className="flex items-center gap-1.5 text-[11px] sm:text-xs">
+            {isAuthenticating ? (
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 sm:px-2.5 sm:py-1.5 font-semibold text-slate-500">
+                <Loader2 className="w-3.5 h-3.5 text-slate-400 animate-spin" />
+                <span>Conectando...</span>
+              </div>
+            ) : user ? (
+              <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-2 py-1 sm:px-2.5 sm:py-1.5 font-semibold">
+                <Cloud className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
+                <span className="hidden sm:inline truncate max-w-[120px] md:max-w-[180px]">Nube: {user.displayName || user.email || 'Conectado'}</span>
+                <span className="sm:hidden">Nube</span>
+                <button
+                  onClick={handleLogout}
+                  title="Cerrar sesión en la nube"
+                  className="ml-1 p-0.5 hover:bg-emerald-100 rounded text-emerald-600 hover:text-emerald-800 transition-colors cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={handleGoogleLogin}
+                  className="flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-bold text-[11px] sm:text-xs px-2.5 py-1 sm:py-1.5 rounded-lg transition-all cursor-pointer shadow-xs"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>Conectar Google</span>
+                </button>
                 
-                {/* Tooltip on hover */}
-                <div className="absolute right-0 top-full mt-2 w-72 p-4 bg-slate-900 text-white rounded-xl shadow-xl text-[11px] font-medium leading-relaxed hidden group-hover:block z-50 transition-all duration-200">
-                  <p className="font-bold text-rose-400 mb-1">Error de Firebase:</p>
-                  <p className="text-slate-200 mb-2 font-mono text-[10px] bg-slate-950 p-2 rounded border border-slate-800">{authError}</p>
-                  <div className="border-t border-slate-800 pt-2 text-slate-300">
-                    <p className="font-bold text-indigo-400 mb-1">¿Cómo solucionarlo?</p>
-                    <ol className="list-decimal pl-3.5 space-y-1">
-                      <li>Ve a tu consola de Firebase</li>
-                      <li>Habilita el proveedor <strong>Anónimo</strong> en <em>Authentication → Sign-in method</em></li>
-                      <li>Añade <strong>juancantillano.github.io</strong> a la lista de <em>Dominios Autorizados</em> en la pestaña de configuración de <em>Authentication</em></li>
-                    </ol>
+                {/* Info Tooltip about Offline / Setup */}
+                <div className="group relative flex items-center justify-center">
+                  <div className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 cursor-help transition-colors">
+                    <HelpCircle className="w-4 h-4" />
+                  </div>
+                  
+                  {/* Tooltip on hover */}
+                  <div className="absolute right-0 top-full mt-2 w-72 p-4 bg-slate-900 text-white rounded-xl shadow-xl text-[11px] font-medium leading-relaxed hidden group-hover:block z-50 transition-all duration-200">
+                    <p className="font-bold text-slate-200 mb-1">💡 Modo Local Activo</p>
+                    <p className="text-slate-300 mb-2.5">Tus escenarios se guardarán de forma segura en este navegador (localStorage) para que no pierdas nada.</p>
+                    
+                    <p className="font-bold text-indigo-400 mb-1">☁️ ¿Quieres guardar en la nube?</p>
+                    <p className="text-slate-300 mb-2">Haz clic en <strong>Conectar Google</strong> para iniciar sesión de manera segura con tu cuenta de Google.</p>
+                    
+                    {authError && (
+                      <div className="border-t border-slate-800 pt-2">
+                        <p className="font-bold text-rose-400 mb-1">Detalle del error técnico:</p>
+                        <p className="text-slate-400 font-mono text-[9px] bg-slate-950 p-2 rounded border border-slate-800">{authError}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
-            ) : (
-              <>
-                <Loader2 className="w-4 h-4 text-slate-400 animate-spin" />
-                <span>Conectando...</span>
-              </>
             )}
           </div>
 
@@ -343,7 +511,18 @@ export default function App() {
                         }`}
                       >
                         <div className="flex-1 min-w-0 pr-3">
-                          <p className="text-xs font-bold text-slate-800 truncate">{m.name}</p>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="text-xs font-bold text-slate-800 truncate">{m.name}</p>
+                            {m.userId === 'local_user' ? (
+                              <span className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[8px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                                <Database className="w-1.5 h-1.5" /> Local
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[8px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-200">
+                                <Cloud className="w-1.5 h-1.5" /> Nube
+                              </span>
+                            )}
+                          </div>
                           <p className="text-[10px] text-slate-400 font-mono mt-0.5">
                             Modificado: {new Date(m.updatedAt).toLocaleDateString()}
                           </p>

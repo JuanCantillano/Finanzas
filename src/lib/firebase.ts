@@ -6,7 +6,9 @@ import {
   User, 
   signOut,
   signInWithEmailAndPassword,
-  createUserWithEmailAndPassword
+  createUserWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithPopup
 } from 'firebase/auth';
 import { 
   getFirestore, 
@@ -88,6 +90,21 @@ export async function loginAnonymously() {
     console.error("Error signing in anonymously:", error);
     throw error;
   }
+}
+
+export async function loginWithGoogle() {
+  try {
+    const provider = new GoogleAuthProvider();
+    const result = await signInWithPopup(auth, provider);
+    return result.user;
+  } catch (error) {
+    console.error("Error signing in with Google:", error);
+    throw error;
+  }
+}
+
+export async function logoutUser() {
+  await signOut(auth);
 }
 
 // Firestore CRUD Helpers for FinancialModels
