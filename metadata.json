@@ -1,0 +1,6 @@
+{
+  "name": "Plan de Negocios en Excel",
+  "description": "Simulador interactivo de Plan de Negocios y Evaluación Financiera con indicadores VAN, TIR, Punto de Equilibrio, Análisis de Sensibilidad y gráficos dinámicos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

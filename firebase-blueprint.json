@@ -1,0 +1,43 @@
+{
+  "entities": {
+    "FinancialModel": {
+      "title": "FinancialModel",
+      "description": "A financial projection model containing sales, expenses, investments, financing, and sensitivity parameters.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "products": {
+          "type": "array",
+          "description": "Products projection configuration list"
+        },
+        "expenses": {
+          "type": "array",
+          "description": "Operating expenses configuration list"
+        },
+        "investments": {
+          "type": "array",
+          "description": "Investment items configuration list"
+        },
+        "financing": {
+          "type": "object",
+          "description": "Debt and financing parameters"
+        },
+        "sensitivity": {
+          "type": "object",
+          "description": "Sensitivity factors multipliers"
+        }
+      },
+      "required": ["id", "userId", "name", "products", "expenses", "investments", "financing", "sensitivity"]
+    }
+  },
+  "firestore": {
+    "models/{modelId}": {
+      "schema": "FinancialModel",
+      "description": "Collection of saved financial projection models"
+    }
+  }
+}

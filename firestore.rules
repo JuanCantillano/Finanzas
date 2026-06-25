@@ -1,0 +1,38 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper to validate generic ID strings
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Helper to validate the financial model entity
+    function isValidFinancialModel(data) {
+      return data.keys().hasAll(['id', 'userId', 'name', 'products', 'expenses', 'investments', 'financing', 'sensitivity'])
+        && data.id is string
+        && data.userId == request.auth.uid
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 100
+        && data.products is list
+        && data.expenses is list
+        && data.investments is list
+        && data.financing is map
+        && data.sensitivity is map;
+    }
+
+    match /models/{modelId} {
+      allow get: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow list: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null 
+                    && isValidId(modelId)
+                    && isValidFinancialModel(request.resource.data);
+      allow update: if request.auth != null 
+                    && resource.data.userId == request.auth.uid
+                    && request.resource.data.userId == request.auth.uid
+                    && isValidFinancialModel(request.resource.data);
+      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+  }
+}
