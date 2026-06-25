@@ -23,7 +23,8 @@ export function SensitivityTab({
   };
 
   const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(val);
+    const sign = val < 0 ? '-' : '';
+    return `${sign}C$ ${new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Math.abs(val))}`;
   };
 
   const handleReset = () => {

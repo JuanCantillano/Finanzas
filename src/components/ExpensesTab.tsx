@@ -37,7 +37,8 @@ export function ExpensesTab({ expenses, onChange }: ExpensesTabProps) {
   };
 
   const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(val);
+    const sign = val < 0 ? '-' : '';
+    return `${sign}C$ ${new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Math.abs(val))}`;
   };
 
   // Aggregated Category Data for Chart
@@ -114,7 +115,7 @@ export function ExpensesTab({ expenses, onChange }: ExpensesTabProps) {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Costo Mensual ($)</label>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Costo Mensual (C$)</label>
                 <input
                   type="number"
                   required

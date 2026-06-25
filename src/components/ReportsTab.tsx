@@ -11,7 +11,8 @@ export function ReportsTab({ years, taxRate }: ReportsTabProps) {
   const [reportType, setReportType] = useState<'pAndL' | 'cashFlow'>('pAndL');
 
   const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(val);
+    const sign = val < 0 ? '-' : '';
+    return `${sign}C$ ${new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Math.abs(val))}`;
   };
 
   const handleExportCSV = () => {
@@ -220,7 +221,7 @@ export function ReportsTab({ years, taxRate }: ReportsTabProps) {
                     const principal = y.cashFlow - y.netIncome - y.depreciation;
                     return (
                       <td key={y.year} className="py-3.5 px-6 text-right">
-                        {principal < 0 ? formatCurrency(Math.abs(principal)) : `-$0`}
+                        {principal < 0 ? formatCurrency(Math.abs(principal)) : `-C$ 0`}
                       </td>
                     );
                   })}

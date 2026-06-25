@@ -41,7 +41,8 @@ export function SalesTab({ products, onChange }: SalesTabProps) {
   };
 
   const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(val);
+    const sign = val < 0 ? '-' : '';
+    return `${sign}C$ ${new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Math.abs(val))}`;
   };
 
   // Calculate year-by-year projections for chart
@@ -125,7 +126,7 @@ export function SalesTab({ products, onChange }: SalesTabProps) {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Precio de Venta ($)</label>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Precio de Venta (C$)</label>
                 <input
                   type="number"
                   required
@@ -139,7 +140,7 @@ export function SalesTab({ products, onChange }: SalesTabProps) {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Costo Unitario / COGS ($)</label>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Costo Unitario / COGS (C$)</label>
                 <input
                   type="number"
                   required
@@ -272,7 +273,7 @@ export function SalesTab({ products, onChange }: SalesTabProps) {
                       stroke="#94a3b8" 
                       fontSize={11} 
                       tickLine={false}
-                      tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`} 
+                      tickFormatter={(val) => `C$ ${(val / 1000).toFixed(0)}k`} 
                     />
                     <Tooltip 
                       formatter={(value: any) => formatCurrency(value)}

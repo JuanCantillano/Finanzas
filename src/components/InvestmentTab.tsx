@@ -55,7 +55,8 @@ export function InvestmentTab({ investments, onChange, debtAmount }: InvestmentT
   const SOURCE_COLORS = ['#3b82f6', '#f59e0b'];
 
   const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(val);
+    const sign = val < 0 ? '-' : '';
+    return `${sign}C$ ${new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Math.abs(val))}`;
   };
 
   return (
@@ -114,7 +115,7 @@ export function InvestmentTab({ investments, onChange, debtAmount }: InvestmentT
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Monto ($)</label>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Monto (C$)</label>
                 <input
                   type="number"
                   required

@@ -20,7 +20,8 @@ export function DashboardTab({
 }: DashboardTabProps) {
 
   const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(val);
+    const sign = val < 0 ? '-' : '';
+    return `${sign}C$ ${new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Math.abs(val))}`;
   };
 
   const formatPercent = (val: number) => {
@@ -137,7 +138,7 @@ export function DashboardTab({
                   stroke="#94a3b8" 
                   fontSize={11} 
                   tickLine={false}
-                  tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`} 
+                  tickFormatter={(val) => `C$ ${(val / 1000).toFixed(0)}k`} 
                 />
                 <Tooltip 
                   formatter={(value: any) => formatCurrency(value)}
@@ -176,7 +177,7 @@ export function DashboardTab({
                   stroke="#94a3b8" 
                   fontSize={11} 
                   tickLine={false}
-                  tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`} 
+                  tickFormatter={(val) => `C$ ${(val / 1000).toFixed(0)}k`} 
                 />
                 <Tooltip 
                   formatter={(value: any) => formatCurrency(value)}

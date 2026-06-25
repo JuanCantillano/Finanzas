@@ -19,7 +19,8 @@ export function FinancingTab({ config, onChange, totalInvestment }: FinancingTab
   };
 
   const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(val);
+    const sign = val < 0 ? '-' : '';
+    return `${sign}C$ ${new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Math.abs(val))}`;
   };
 
   // Chart data: Principal vs Interest
@@ -82,7 +83,7 @@ export function FinancingTab({ config, onChange, totalInvestment }: FinancingTab
             <div className="space-y-5">
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                  Monto del Préstamo ($)
+                  Monto del Préstamo (C$)
                 </label>
                 <input
                   type="range"
@@ -94,7 +95,7 @@ export function FinancingTab({ config, onChange, totalInvestment }: FinancingTab
                   className="w-full accent-indigo-600 cursor-pointer"
                 />
                 <div className="flex justify-between items-center mt-1.5 bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">
-                  <span className="text-[10px] font-bold text-slate-400">$0</span>
+                  <span className="text-[10px] font-bold text-slate-400">C$ 0</span>
                   <span className="text-xs font-black text-indigo-600">{formatCurrency(config.debtAmount)}</span>
                   <span className="text-[10px] font-bold text-slate-400">{formatCurrency(totalInvestment)}</span>
                 </div>
@@ -216,7 +217,7 @@ export function FinancingTab({ config, onChange, totalInvestment }: FinancingTab
                       stroke="#94a3b8" 
                       fontSize={11} 
                       tickLine={false}
-                      tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`} 
+                      tickFormatter={(val) => `C$ ${(val / 1000).toFixed(0)}k`} 
                     />
                     <Tooltip 
                       formatter={(value: any) => formatCurrency(value)}
